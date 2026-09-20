@@ -1,0 +1,108 @@
+.route-loading,
+.not-found-page {
+  width: min(calc(100% - 3rem), 860px);
+  min-height: calc(100vh - var(--topbar-height));
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.route-loading {
+  justify-content: center;
+  gap: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.route-loading__mark {
+  width: 34px;
+  height: 34px;
+  border: 2px solid rgba(129, 140, 248, 0.18);
+  border-top-color: var(--color-brand-bright);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+.route-loading div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.route-loading strong {
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+}
+
+.route-loading div span {
+  font-size: 0.65rem;
+}
+
+.not-found-page {
+  gap: clamp(2rem, 8vw, 6rem);
+}
+
+.not-found-page__code {
+  color: rgba(129, 140, 248, 0.12);
+  font-size: clamp(6rem, 17vw, 12rem);
+  font-weight: 800;
+  letter-spacing: -0.09em;
+  line-height: 0.8;
+}
+
+.not-found-page h1 {
+  max-width: 620px;
+  margin: 0.7rem 0 1rem;
+  color: var(--color-text);
+  font-size: clamp(2rem, 5vw, 4rem);
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.not-found-page p {
+  max-width: 590px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.not-found-page code {
+  color: var(--color-text-secondary);
+}
+
+.not-found-page__action {
+  width: fit-content;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1.4rem;
+  padding: 0 0.85rem;
+  color: #e0e7ff;
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  border-radius: var(--radius-sm);
+  background: rgba(99, 102, 241, 0.13);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.not-found-page__action:hover {
+  border-color: rgba(129, 140, 248, 0.5);
+  background: rgba(99, 102, 241, 0.2);
+}
+
+@media (max-width: 680px) {
+  .not-found-page {
+    min-height: calc(100vh - var(--topbar-height) - 2rem);
+    display: grid;
+    align-content: center;
+    gap: 1.4rem;
+  }
+
+  .not-found-page__code {
+    font-size: 5rem;
+  }
+}
