@@ -1,0 +1,245 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Sentinel AML hackathon - serialized FastAPI and S3 ingestion container
+
+Parameters:
+  FrontendOrigin:
+    Type: String
+    Default: http://localhost:5173
+    AllowedPattern: 'https?://[^/]+(:[0-9]+)?'
+    Description: Exact React origin, without trailing slash; no wildcard
+  InvestigationTableName:
+    Type: String
+    Default: SentinelInvestigations
+
+Resources:
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowPublicReadOfFrontendAssets
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+          - Sid: DenyInsecureFrontendTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt FrontendBucket.Arn
+              - !Sub '${FrontendBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  EvidenceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # Same expression in IAM/environment avoids an S3 notification dependency cycle.
+      BucketName: !Sub '${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-evidence'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !Ref FrontendOrigin
+              - !Sub 'https://${FrontendBucket}.s3.${AWS::Region}.${AWS::URLSuffix}'
+            AllowedMethods: [GET, PUT, POST, HEAD]
+            AllowedHeaders: ['content-type', 'x-amz-*']
+            MaxAge: 300
+  EvidenceBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref EvidenceBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt EvidenceBucket.Arn
+              - !Sub '${EvidenceBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+  Investigations:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref InvestigationTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: investigation_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: investigation_id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+  RiskAlerts:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Sentinel AML alerts
+  LambdaLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-app'
+      RetentionInDays: 7
+  ApiLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+  ApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SentinelRuntime
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt LambdaLogs.Arn
+              - Effect: Allow
+                # HeadObject needs ListBucket to distinguish missing keys from AccessDenied.
+                Action: s3:ListBucket
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-evidence'
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-evidence/datasets/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-evidence/reports/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-evidence/sar-drafts/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-evidence/state/*'
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Scan]
+                Resource: !GetAtt Investigations.Arn
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref RiskAlerts
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: '$default'
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref FrontendOrigin
+          - !Sub 'https://${FrontendBucket}.s3.${AWS::Region}.${AWS::URLSuffix}'
+        AllowHeaders: [Content-Type, X-Request-ID, X-Client-Request-Id]
+        ExposeHeaders: [X-Request-ID, Content-Disposition]
+        AllowMethods: [GET, POST, DELETE, OPTIONS]
+        AllowCredentials: true
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiLogs.Arn
+        Format: '{"request_id":"$context.requestId","method":"$context.httpMethod","route":"$context.routeKey","status":"$context.status","duration_ms":"$context.responseLatency"}'
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+  Application:
+    Type: AWS::Serverless::Function
+    Metadata:
+      Dockerfile: aws/Dockerfile
+      DockerContext: .
+      DockerTag: sentinel-python312
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-app'
+      PackageType: Image
+      Architectures: [x86_64]
+      Role: !GetAtt ApplicationRole.Arn
+      MemorySize: 3008
+      Timeout: 900
+      EphemeralStorage:
+        Size: 4096
+      Environment:
+        Variables:
+          APP_ENV: production
+          AWS_ENABLED: 'true'
+          AWS_S3_BUCKET: !Sub '${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-evidence'
+          AWS_DYNAMODB_TABLE: !Ref Investigations
+          AWS_SNS_TOPIC_ARN: !Ref RiskAlerts
+          DATA_DIR: /tmp/sentinel
+          DB_PATH: /tmp/sentinel/aml.duckdb
+          UPLOAD_DIR: /tmp/sentinel/uploads
+          MAX_UPLOAD_BYTES: '4194304'
+          AWS_MAX_DATASET_BYTES: '52428800'
+          ALLOWED_ORIGINS: !Join [',', [!Ref FrontendOrigin, !Sub 'https://${FrontendBucket}.s3.${AWS::Region}.${AWS::URLSuffix}']]
+          LOG_LEVEL: info
+      EventInvokeConfig:
+        MaximumRetryAttempts: 2
+        MaximumEventAgeInSeconds: 3600
+        DestinationConfig:
+          OnFailure:
+            Type: SNS
+            Destination: !Ref RiskAlerts
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+            PayloadFormatVersion: '2.0'
+        DatasetCreated:
+          Type: S3
+          Properties:
+            Bucket: !Ref EvidenceBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: datasets/
+
+Outputs:
+  FrontendBucketName:
+    Value: !Ref FrontendBucket
+  FrontendUrl:
+    Value: !Sub 'https://${FrontendBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/index.html#/'
+  ApiUrl:
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+  BucketName:
+    Value: !Ref EvidenceBucket
+  TableName:
+    Value: !Ref Investigations
+  TopicArn:
+    Value: !Ref RiskAlerts
+  FunctionName:
+    Value: !Ref Application
+  LambdaLogGroup:
+    Value: !Ref LambdaLogs
+  ApiLogGroup:
+    Value: !Ref ApiLogs
