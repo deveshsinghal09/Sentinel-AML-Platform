@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: sentinel-aml-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m scripts.bootstrap_data && uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /ready
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: LOG_LEVEL
+        value: info
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATA_BUNDLE_URL
+        sync: false
+      - key: DATA_BUNDLE_SHA256
+        sync: false
+    disk:
+      name: sentinel-data
+      mountPath: /opt/render/project/src/dataset
+      sizeGB: 5

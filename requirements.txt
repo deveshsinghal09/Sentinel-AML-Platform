@@ -1,0 +1,48 @@
+# ── Core runtime ──────────────────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.1
+python-dotenv==1.0.1
+
+# ── LLM / Groq ────────────────────────────────────────────────────────────────
+groq==0.9.0
+openai==1.30.5            # kept for type-compatible client shim if needed
+tiktoken==0.7.0
+
+# ── Data layer ────────────────────────────────────────────────────────────────
+duckdb==0.10.3
+pandas==2.2.2
+pyarrow==16.1.0
+numpy==1.26.4
+openpyxl==3.1.5
+reportlab==4.4.9
+python-multipart==0.0.9
+
+# ── ML / Statistical ──────────────────────────────────────────────────────────
+scikit-learn==1.5.0
+scipy==1.13.1
+
+# ── Graph (conditional) ───────────────────────────────────────────────────────
+networkx==3.3
+
+# ── BM25 grounding (Explanation tool only) ────────────────────────────────────
+rank-bm25==0.2.2
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+streamlit==1.35.0
+plotly==5.22.0
+altair==5.3.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+httpx==0.27.0
+tenacity==8.3.0           # retry logic for LLM calls
+rich==13.7.1              # pretty console output / execution trace
+loguru==0.7.2
+python-dateutil==2.9.0
+
+# ── Development / verification ───────────────────────────────────────────────
+pytest==8.3.5
+
+# Optional AWS deployment (standard IAM credential provider chain)
+boto3>=1.35,<2
+mangum==0.19.0
