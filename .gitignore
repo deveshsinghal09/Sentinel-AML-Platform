@@ -1,0 +1,56 @@
+# AML Agent — Project Gitignore
+
+# Data and analyst artefacts (never commit customer or transaction evidence)
+dataset/
+*.duckdb
+*.db
+*.parquet
+*.feather
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!frontend/.env.aws.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+.venv/
+.venv-iac/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# React frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+.npm-cache/
+.pnpm-store/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local migration and generated outputs
+.legacy_frontend_worktree/
+output/
+reports/
+investigation.pdf
+exports/
+.aws-sam/
+.playwright-cli/
+samconfig.toml

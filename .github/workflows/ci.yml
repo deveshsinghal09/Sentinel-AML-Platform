@@ -1,0 +1,49 @@
+name: Sentinel AML CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Unit and contract tests
+        run: pytest -q -m "not requires_data and not e2e"
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - id: frontend-source
+        shell: bash
+        working-directory: .
+        run: |
+          if [[ -f frontend/package-lock.json ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.frontend-source.outputs.available == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - if: steps.frontend-source.outputs.available == 'true'
+        run: npm ci
+      - if: steps.frontend-source.outputs.available == 'true'
+        run: npm test
+      - if: steps.frontend-source.outputs.available == 'true'
+        run: npm run lint
+      - if: steps.frontend-source.outputs.available == 'true'
+        run: npm run build
