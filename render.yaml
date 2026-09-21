@@ -1,10 +1,13 @@
 services:
+  # Public FastAPI service deployed from this repository.
   - type: web
     name: sentinel-aml-api
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt
+    # Seed the governed dataset before starting the API on Render's assigned port.
     startCommand: python -m scripts.bootstrap_data && uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    # Readiness checks verify that the API and its required data are available.
     healthCheckPath: /ready
     envVars:
       - key: PYTHON_VERSION
@@ -19,6 +22,7 @@ services:
         sync: false
       - key: DATA_BUNDLE_SHA256
         sync: false
+    # Persist bootstrapped AML data across deploys and service restarts.
     disk:
       name: sentinel-data
       mountPath: /opt/render/project/src/dataset
